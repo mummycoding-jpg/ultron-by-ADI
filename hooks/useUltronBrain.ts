@@ -89,10 +89,13 @@ export function useUltronBrain() {
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error ?? "Request failed");
 
+        const userMsg: ChatMessage = { role: "user", text };
+        const modelMsg: ChatMessage = { role: "model", text: data.reply };
+
         historyRef.current = [
           ...historyRef.current,
-          { role: "user", text },
-          { role: "model", text: data.reply },
+          userMsg,
+          modelMsg,
         ].slice(-10); // keep last 10 turns
 
         setReply(data.reply);
