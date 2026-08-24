@@ -2,7 +2,7 @@
 // Server-side helper that talks to Google Gemini.
 // Requires GEMINI_API_KEY in your environment (Railway → Variables).
 
-const GEMINI_MODEL = "gemini-2.0-flash"; // fast + free-tier friendly
+const GEMINI_MODEL = "gemini-3.6-flash"; // current Flash model, still free-tier eligible
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 export type ChatMessage = {
