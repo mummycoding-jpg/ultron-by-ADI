@@ -1,6 +1,7 @@
 // hooks/useUltronBrain.ts
 // Client-side hook: browser mic -> Web Speech API (STT) -> /api/chat (Gemini)
-// -> Web Speech Synthesis (TTS). No API keys needed in the browser.
+// -> Web Speech Synthesis (TTS). Auto-relistens after ULTRON finishes
+// speaking, so it feels like a real back-and-forth conversation.
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -14,9 +15,16 @@ export function useUltronBrain() {
   const [transcript, setTranscript] = useState("");
   const [reply, setReply] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [autoListen, setAutoListen] = useState(true); // hands-free mode
 
   const historyRef = useRef<ChatMessage[]>([]);
   const recognitionRef = useRef<any>(null);
+  const autoListenRef = useRef(autoListen);
+  const manuallyStoppedRef = useRef(false);
+
+  useEffect(() => {
+    autoListenRef.current = autoListen;
+  }, [autoListen]);
 
   // Set up SpeechRecognition once on mount
   useEffect(() => {
@@ -43,7 +51,11 @@ export function useUltronBrain() {
     };
 
     recognition.onerror = (event: any) => {
-      setError(`Mic error: ${event.error}`);
+      // "no-speech" / "aborted" happen naturally in auto mode — don't
+      // surface those as scary errors.
+      if (event.error !== "no-speech" && event.error !== "aborted") {
+        setError(`Mic error: ${event.error}`);
+      }
       setStatus("idle");
     };
 
@@ -56,21 +68,48 @@ export function useUltronBrain() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const speak = useCallback((text: string) => {
-    if (!("speechSynthesis" in window)) {
-      setError("This browser doesn't support speech output.");
-      setStatus("idle");
-      return;
+  const startListening = useCallback(() => {
+    if (!recognitionRef.current) return;
+    manuallyStoppedRef.current = false;
+    setError(null);
+    setTranscript("");
+    setStatus("listening");
+    try {
+      recognitionRef.current.start();
+    } catch {
+      // already started — ignore
     }
-    window.speechSynthesis.cancel(); // stop any current speech
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 0.9;
-    utterance.onstart = () => setStatus("speaking");
-    utterance.onend = () => setStatus("idle");
-    utterance.onerror = () => setStatus("idle");
-    window.speechSynthesis.speak(utterance);
   }, []);
+
+  const stopListening = useCallback(() => {
+    manuallyStoppedRef.current = true; // user explicitly stopped — don't auto-restart
+    recognitionRef.current?.stop();
+  }, []);
+
+  const speak = useCallback(
+    (text: string) => {
+      if (!("speechSynthesis" in window)) {
+        setError("This browser doesn't support speech output.");
+        setStatus("idle");
+        return;
+      }
+      window.speechSynthesis.cancel(); // stop any current speech
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 0.9;
+      utterance.onstart = () => setStatus("speaking");
+      utterance.onend = () => {
+        setStatus("idle");
+        // Auto-relisten so the user doesn't have to tap again.
+        if (autoListenRef.current && !manuallyStoppedRef.current) {
+          setTimeout(() => startListening(), 500);
+        }
+      };
+      utterance.onerror = () => setStatus("idle");
+      window.speechSynthesis.speak(utterance);
+    },
+    [startListening]
+  );
 
   const handleUserSpeech = useCallback(
     async (text: string) => {
@@ -108,20 +147,8 @@ export function useUltronBrain() {
     [speak]
   );
 
-  const startListening = useCallback(() => {
-    if (!recognitionRef.current) return;
-    setError(null);
-    setTranscript("");
-    setStatus("listening");
-    try {
-      recognitionRef.current.start();
-    } catch {
-      // already started — ignore
-    }
-  }, []);
-
-  const stopListening = useCallback(() => {
-    recognitionRef.current?.stop();
+  const toggleAutoListen = useCallback(() => {
+    setAutoListen((v) => !v);
   }, []);
 
   return {
@@ -129,6 +156,8 @@ export function useUltronBrain() {
     transcript, // last thing the user said
     reply, // last thing ULTRON said
     error,
+    autoListen, // whether hands-free mode is on
+    toggleAutoListen,
     startListening,
     stopListening,
   };
