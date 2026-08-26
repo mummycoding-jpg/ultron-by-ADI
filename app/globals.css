@@ -74,7 +74,7 @@ body {
 .hud {
   position: fixed;
   z-index: 20;
-  color: #ffaa30;
+  color: #33aaff;
   font-family: "Courier New", monospace;
   user-select: none;
 }
@@ -92,18 +92,18 @@ body {
   min-width: 44px;
   height: 44px;
   padding: 0 12px;
-  background: rgba(20, 10, 0, 0.55);
-  border: 1px solid rgba(255, 170, 48, 0.45);
+  background: rgba(0, 10, 20, 0.55);
+  border: 1px solid rgba(48, 170, 255, 0.45);
   border-radius: 4px;
-  color: #ffaa30;
+  color: #33aaff;
   font-family: "Courier New", monospace;
   font-size: 15px;
   font-weight: bold;
   letter-spacing: 0.08em;
   cursor: pointer;
   backdrop-filter: blur(2px);
-  text-shadow: 0 0 6px rgba(255, 170, 48, 0.7);
-  box-shadow: 0 0 12px rgba(255, 140, 20, 0.12) inset;
+  text-shadow: 0 0 6px rgba(48, 170, 255, 0.7);
+  box-shadow: 0 0 12px rgba(20, 140, 255, 0.12) inset;
   transition:
     background 0.15s ease,
     border-color 0.15s ease,
@@ -111,21 +111,21 @@ body {
 }
 
 .hud-btn:hover {
-  background: rgba(60, 30, 0, 0.7);
-  border-color: rgba(255, 200, 100, 0.9);
+  background: rgba(0, 30, 60, 0.7);
+  border-color: rgba(100, 200, 255, 0.9);
   box-shadow:
-    0 0 14px rgba(255, 150, 30, 0.35),
-    0 0 12px rgba(255, 140, 20, 0.2) inset;
+    0 0 14px rgba(30, 150, 255, 0.35),
+    0 0 12px rgba(20, 140, 255, 0.2) inset;
 }
 
 .hud-btn:active {
-  background: rgba(90, 45, 0, 0.8);
+  background: rgba(0, 45, 90, 0.8);
 }
 
 .hud-btn[aria-pressed="true"] {
-  background: rgba(120, 60, 0, 0.6);
-  border-color: #ffcc66;
-  color: #ffcc66;
+  background: rgba(0, 60, 120, 0.6);
+  border-color: #66ccff;
+  color: #66ccff;
 }
 
 .hud-row {
@@ -140,14 +140,14 @@ body {
   line-height: 1.7;
   letter-spacing: 0.1em;
   opacity: 0.55;
-  text-shadow: 0 0 8px rgba(255, 170, 48, 0.6);
+  text-shadow: 0 0 8px rgba(48, 170, 255, 0.6);
   pointer-events: none;
 }
 
 .hud-hint .key {
   display: inline-block;
   padding: 0 4px;
-  border: 1px solid rgba(255, 170, 48, 0.5);
+  border: 1px solid rgba(48, 170, 255, 0.5);
   border-radius: 3px;
   margin-right: 4px;
   font-size: 10px;
@@ -159,7 +159,7 @@ body {
   font-size: 13px;
   letter-spacing: 0.35em;
   opacity: 0.7;
-  text-shadow: 0 0 10px rgba(255, 170, 48, 0.8);
+  text-shadow: 0 0 10px rgba(48, 170, 255, 0.8);
   pointer-events: none;
 }
 
@@ -169,7 +169,7 @@ body {
   margin-top: 6px;
   width: 120px;
   height: 1px;
-  background: linear-gradient(to right, rgba(255, 170, 48, 0.8), transparent);
+  background: linear-gradient(to right, rgba(48, 170, 255, 0.8), transparent);
 }
 
 .hud-error {
@@ -185,11 +185,11 @@ body {
   width: 208px;
   height: 156px;
   display: none;
-  border: 1px solid rgba(255, 170, 48, 0.45);
+  border: 1px solid rgba(48, 170, 255, 0.45);
   border-radius: 4px;
   overflow: hidden;
-  background: #0a0500;
-  box-shadow: 0 0 16px rgba(255, 140, 20, 0.15);
+  background: #00050a;
+  box-shadow: 0 0 16px rgba(20, 140, 255, 0.15);
 }
 
 .camera-panel.visible {
@@ -203,7 +203,7 @@ body {
   height: 100%;
   object-fit: cover;
   transform: scaleX(-1); /* mirror so it behaves like a mirror */
-  filter: sepia(1) hue-rotate(-15deg) saturate(2.2) brightness(0.75)
+  filter: sepia(1) hue-rotate(160deg) saturate(2.2) brightness(0.75)
     contrast(1.15);
   opacity: 0.85;
 }
@@ -223,9 +223,9 @@ body {
   padding: 3px 6px;
   font-size: 10px;
   letter-spacing: 0.15em;
-  color: #ffcc66;
-  background: rgba(10, 5, 0, 0.65);
-  text-shadow: 0 0 6px rgba(255, 170, 48, 0.8);
+  color: #66ccff;
+  background: rgba(0, 5, 10, 0.65);
+  text-shadow: 0 0 6px rgba(48, 170, 255, 0.8);
 }
 
 @media (max-width: 600px) {
