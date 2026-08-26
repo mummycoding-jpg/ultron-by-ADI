@@ -7,7 +7,7 @@
 // - Function calling for "open a website" voice commands
 // - Optional image input (for camera vision requests)
 
-const GEMINI_MODEL = "gemini-3.6-flash";
+const GEMINI_MODEL = "gemini-3.1-flash-lite"; // more generous free-tier rate limit
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 export type ChatMessage = { role: "user" | "model"; text: string };
