@@ -1,21 +1,85 @@
 // hooks/useUltronBrain.ts
 // Client-side hook: browser mic -> Web Speech API (STT) -> /api/chat (Gemini)
-// -> Web Speech Synthesis (TTS). Auto-relistens after ULTRON finishes
-// speaking, so it feels like a real back-and-forth conversation.
+// -> Web Speech Synthesis (TTS).
+//
+// Extra abilities:
+// - Remembers conversation across visits (localStorage)
+// - Captures one camera photo when you say a "look/see" phrase, and sends
+//   it to Gemini for vision
+// - Opens websites when Gemini calls the open_website function
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type ChatMessage = { role: "user" | "model"; text: string };
 
-export type UltronStatus = "idle" | "listening" | "thinking" | "speaking";
+export type UltronStatus =
+  | "idle"
+  | "listening"
+  | "seeing"
+  | "thinking"
+  | "speaking";
+
+const HISTORY_KEY = "ultron_chat_history";
+const LOOK_TRIGGERS = [
+  "look at this",
+  "look at that",
+  "what do you see",
+  "what is this",
+  "what's this",
+  "can you see",
+  "show you",
+  "take a look",
+];
+
+function loadHistory(): ChatMessage[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(history: ChatMessage[]) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch {
+    // storage full or unavailable — not critical, just skip
+  }
+}
+
+async function captureCameraFrame(): Promise<string | null> {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 480, height: 360 },
+    });
+    const video = document.createElement("video");
+    video.srcObject = stream;
+    await video.play();
+    // give the camera a moment to expose/focus
+    await new Promise((r) => setTimeout(r, 300));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 480;
+    canvas.height = video.videoHeight || 360;
+    const ctx = canvas.getContext("2d");
+    ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    stream.getTracks().forEach((t) => t.stop()); // release camera immediately
+
+    return canvas.toDataURL("image/jpeg", 0.7);
+  } catch {
+    return null;
+  }
+}
 
 export function useUltronBrain() {
   const [status, setStatus] = useState<UltronStatus>("idle");
   const [transcript, setTranscript] = useState("");
   const [reply, setReply] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [autoListen, setAutoListen] = useState(true); // hands-free mode
+  const [autoListen, setAutoListen] = useState(true);
 
   const historyRef = useRef<ChatMessage[]>([]);
   const recognitionRef = useRef<any>(null);
@@ -26,7 +90,11 @@ export function useUltronBrain() {
     autoListenRef.current = autoListen;
   }, [autoListen]);
 
-  // Set up SpeechRecognition once on mount
+  // Load saved conversation on first mount
+  useEffect(() => {
+    historyRef.current = loadHistory();
+  }, []);
+
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
@@ -51,8 +119,6 @@ export function useUltronBrain() {
     };
 
     recognition.onerror = (event: any) => {
-      // "no-speech" / "aborted" happen naturally in auto mode — don't
-      // surface those as scary errors.
       if (event.error !== "no-speech" && event.error !== "aborted") {
         setError(`Mic error: ${event.error}`);
       }
@@ -82,7 +148,7 @@ export function useUltronBrain() {
   }, []);
 
   const stopListening = useCallback(() => {
-    manuallyStoppedRef.current = true; // user explicitly stopped — don't auto-restart
+    manuallyStoppedRef.current = true;
     recognitionRef.current?.stop();
   }, []);
 
@@ -93,14 +159,13 @@ export function useUltronBrain() {
         setStatus("idle");
         return;
       }
-      window.speechSynthesis.cancel(); // stop any current speech
+      window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1.0;
       utterance.pitch = 0.9;
       utterance.onstart = () => setStatus("speaking");
       utterance.onend = () => {
         setStatus("idle");
-        // Auto-relisten so the user doesn't have to tap again.
         if (autoListenRef.current && !manuallyStoppedRef.current) {
           setTimeout(() => startListening(), 500);
         }
@@ -113,8 +178,24 @@ export function useUltronBrain() {
 
   const handleUserSpeech = useCallback(
     async (text: string) => {
-      setStatus("thinking");
       setError(null);
+
+      const wantsVision = LOOK_TRIGGERS.some((phrase) =>
+        text.toLowerCase().includes(phrase)
+      );
+
+      let image: string | undefined;
+      if (wantsVision) {
+        setStatus("seeing");
+        const frame = await captureCameraFrame();
+        if (frame) {
+          image = frame;
+        } else {
+          setError("Couldn't access the camera for that.");
+        }
+      }
+
+      setStatus("thinking");
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
@@ -122,6 +203,7 @@ export function useUltronBrain() {
           body: JSON.stringify({
             message: text,
             history: historyRef.current,
+            image,
           }),
         });
 
@@ -131,14 +213,17 @@ export function useUltronBrain() {
         const userMsg: ChatMessage = { role: "user", text };
         const modelMsg: ChatMessage = { role: "model", text: data.reply };
 
-        historyRef.current = [
-          ...historyRef.current,
-          userMsg,
-          modelMsg,
-        ].slice(-10); // keep last 10 turns
+        historyRef.current = [...historyRef.current, userMsg, modelMsg].slice(
+          -10
+        );
+        saveHistory(historyRef.current);
 
         setReply(data.reply);
         speak(data.reply);
+
+        if (data.action?.type === "open_website" && data.action.url) {
+          window.open(data.action.url, "_blank");
+        }
       } catch (err: any) {
         setError(err?.message ?? "Something went wrong talking to ULTRON");
         setStatus("idle");
@@ -151,14 +236,20 @@ export function useUltronBrain() {
     setAutoListen((v) => !v);
   }, []);
 
+  const clearMemory = useCallback(() => {
+    historyRef.current = [];
+    saveHistory([]);
+  }, []);
+
   return {
-    status, // "idle" | "listening" | "thinking" | "speaking"
-    transcript, // last thing the user said
-    reply, // last thing ULTRON said
+    status,
+    transcript,
+    reply,
     error,
-    autoListen, // whether hands-free mode is on
+    autoListen,
     toggleAutoListen,
     startListening,
     stopListening,
+    clearMemory,
   };
 }
