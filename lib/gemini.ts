@@ -3,9 +3,10 @@
 // Requires GEMINI_API_KEY in your environment (Railway → Variables).
 //
 // Now supports:
-// - Google Search grounding (ULTRON can look things up)
 // - Function calling for "open a website" voice commands
 // - Optional image input (for camera vision requests)
+// (Google Search grounding removed — Gemini 3 models have 0 free-tier
+//  search grounding quota, which was causing every request to 429.)
 
 const GEMINI_MODEL = "gemini-3.1-flash-lite"; // more generous free-tier rate limit
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
@@ -25,10 +26,8 @@ holographic orb interface. Keep replies short (1-3 sentences) — they will
 be spoken out loud, so avoid long paragraphs, markdown, or lists. Be
 conversational, confident, and a little theatrical, but genuinely helpful.
 
-You have two special abilities:
-1. Web search — use it whenever the user asks about current events, facts
-   you're unsure of, or anything time-sensitive.
-2. Opening websites — if the user asks you to "open", "go to", "pull up",
+You have one special ability:
+1. Opening websites — if the user asks you to "open", "go to", "pull up",
    or "visit" a specific website (e.g. "open YouTube", "open github.com"),
    call the open_website function with the full https:// URL of that site.
    Only call it when the user clearly wants a site opened — not for normal
@@ -90,7 +89,6 @@ export async function askGemini(
       contents,
       systemInstruction: { parts: [{ text: ULTRON_SYSTEM_PROMPT }] },
       tools: [
-        { googleSearch: {} },
         { functionDeclarations: [OPEN_WEBSITE_FUNCTION] },
       ],
       generationConfig: {
