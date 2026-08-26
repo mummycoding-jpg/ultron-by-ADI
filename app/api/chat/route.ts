@@ -1,5 +1,6 @@
 // app/api/chat/route.ts
-// POST { message: string, history?: ChatMessage[] } -> { reply: string }
+// POST { message: string, history?: ChatMessage[], image?: string }
+// -> { reply: string, action: { type: "open_website", url: string } | null }
 
 import { NextRequest, NextResponse } from "next/server";
 import { askGemini, ChatMessage } from "@/lib/gemini";
@@ -11,6 +12,7 @@ export async function POST(req: NextRequest) {
     const history: ChatMessage[] = Array.isArray(body?.history)
       ? body.history
       : [];
+    const image: string | undefined = body?.image;
 
     if (!message || typeof message !== "string") {
       return NextResponse.json(
@@ -19,9 +21,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const reply = await askGemini(history, message);
+    const result = await askGemini(history, message, image);
 
-    return NextResponse.json({ reply });
+    return NextResponse.json(result);
   } catch (err: any) {
     console.error("ULTRON /api/chat error:", err);
     return NextResponse.json(
