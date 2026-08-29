@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createOrbScene, type OrbSceneApi } from "@/lib/orbScene";
 import { HandTracker, type TrackerStatus } from "@/lib/handTracker";
+import { useUltronBrain } from "@/hooks/useUltronBrain";
 
 type CameraState = "off" | "starting" | "on" | "error";
 
@@ -22,6 +23,21 @@ export default function JarvisOrb() {
   const [camera, setCamera] = useState<CameraState>("off");
   const [status, setStatus] = useState<TrackerStatus>({ hands: 0, mode: "idle" });
   const [error, setError] = useState<string | null>(null);
+
+  // Wires Ultron's synthetic speech-level pulse straight into the orb scene
+  // so debris/dust react while it talks.
+  const {
+    status: brainStatus,
+    transcript,
+    reply,
+    error: brainError,
+    autoListen,
+    toggleAutoListen,
+    startListening,
+    stopListening,
+  } = useUltronBrain({
+    onSpeechLevel: (level) => sceneRef.current?.setSpeechLevel(level),
+  });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -136,7 +152,6 @@ export default function JarvisOrb() {
 
       <div className="hud hud-controls">
         <div className={`camera-panel${cameraOn ? " visible" : ""}`}>
-          {/* Mirrored preview so it behaves like a mirror */}
           <video ref={videoRef} muted playsInline className="camera-video" />
           <canvas ref={overlayRef} width={208} height={156} className="camera-overlay" />
           <div className="camera-status">
@@ -147,6 +162,7 @@ export default function JarvisOrb() {
         </div>
 
         {error && <div className="hud-error">{error}</div>}
+        {brainError && <div className="hud-error">{brainError}</div>}
 
         <div className="hud-row">
           <button
@@ -170,6 +186,21 @@ export default function JarvisOrb() {
             RESET
           </button>
         </div>
+        <div className="hud-row">
+          <button
+            type="button"
+            className="hud-btn"
+            aria-pressed={brainStatus === "listening"}
+            onClick={brainStatus === "listening" ? stopListening : startListening}
+          >
+            {brainStatus === "listening" ? "LISTENING…" : "TALK TO ULTRON"}
+          </button>
+          <button type="button" className="hud-btn" aria-pressed={autoListen} onClick={toggleAutoListen}>
+            AUTO-LISTEN {autoListen ? "ON" : "OFF"}
+          </button>
+        </div>
+        {transcript && <div className="hud-hint">{transcript}</div>}
+        {reply && <div className="hud-hint">{reply}</div>}
       </div>
     </>
   );
