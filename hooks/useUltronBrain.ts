@@ -7,6 +7,9 @@
 // - Captures one camera photo when you say a "look/see" phrase, and sends
 //   it to Gemini for vision
 // - Opens websites when Gemini calls the open_website function
+// - Reports a synthetic 0-1 "speech level" via onSpeechLevel while talking,
+//   driven by word-boundary events (real amplitude isn't exposed by
+//   speechSynthesis), for orb particle reactions.
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -57,7 +60,6 @@ async function captureCameraFrame(): Promise<string | null> {
     const video = document.createElement("video");
     video.srcObject = stream;
     await video.play();
-    // give the camera a moment to expose/focus
     await new Promise((r) => setTimeout(r, 300));
 
     const canvas = document.createElement("canvas");
@@ -66,7 +68,7 @@ async function captureCameraFrame(): Promise<string | null> {
     const ctx = canvas.getContext("2d");
     ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    stream.getTracks().forEach((t) => t.stop()); // release camera immediately
+    stream.getTracks().forEach((t) => t.stop());
 
     return canvas.toDataURL("image/jpeg", 0.7);
   } catch {
@@ -74,7 +76,14 @@ async function captureCameraFrame(): Promise<string | null> {
   }
 }
 
-export function useUltronBrain() {
+export interface UseUltronBrainOptions {
+  /** Called continuously with a synthetic 0-1 "speech level" while Ultron talks. */
+  onSpeechLevel?: (level: number) => void;
+}
+
+export function useUltronBrain(options: UseUltronBrainOptions = {}) {
+  const { onSpeechLevel } = options;
+
   const [status, setStatus] = useState<UltronStatus>("idle");
   const [transcript, setTranscript] = useState("");
   const [reply, setReply] = useState("");
@@ -85,12 +94,19 @@ export function useUltronBrain() {
   const recognitionRef = useRef<any>(null);
   const autoListenRef = useRef(autoListen);
   const manuallyStoppedRef = useRef(false);
+  const onSpeechLevelRef = useRef(onSpeechLevel);
+  const pulseRafRef = useRef<number | null>(null);
+  const pulseTargetRef = useRef(0);
+  const pulseCurrentRef = useRef(0);
+
+  useEffect(() => {
+    onSpeechLevelRef.current = onSpeechLevel;
+  }, [onSpeechLevel]);
 
   useEffect(() => {
     autoListenRef.current = autoListen;
   }, [autoListen]);
 
-  // Load saved conversation on first mount
   useEffect(() => {
     historyRef.current = loadHistory();
   }, []);
@@ -152,6 +168,32 @@ export function useUltronBrain() {
     recognitionRef.current?.stop();
   }, []);
 
+  // ——— Synthetic speech-level pulse loop ———
+  // Runs while speaking; eases pulseCurrent toward pulseTarget each frame
+  // and reports it via onSpeechLevel. Word-boundary events bump the
+  // target up; it decays back down between words.
+  const startPulseLoop = useCallback(() => {
+    const tick = () => {
+      pulseCurrentRef.current +=
+        (pulseTargetRef.current - pulseCurrentRef.current) * 0.3;
+      // gentle decay so it doesn't hang at a high plateau between words
+      pulseTargetRef.current *= 0.92;
+      onSpeechLevelRef.current?.(pulseCurrentRef.current);
+      pulseRafRef.current = requestAnimationFrame(tick);
+    };
+    pulseRafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  const stopPulseLoop = useCallback(() => {
+    if (pulseRafRef.current !== null) {
+      cancelAnimationFrame(pulseRafRef.current);
+      pulseRafRef.current = null;
+    }
+    pulseTargetRef.current = 0;
+    pulseCurrentRef.current = 0;
+    onSpeechLevelRef.current?.(0);
+  }, []);
+
   const speak = useCallback(
     (text: string) => {
       if (!("speechSynthesis" in window)) {
@@ -163,17 +205,34 @@ export function useUltronBrain() {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1.0;
       utterance.pitch = 0.9;
-      utterance.onstart = () => setStatus("speaking");
+
+      utterance.onstart = () => {
+        setStatus("speaking");
+        startPulseLoop();
+      };
+
+      // Fires roughly per word — bump the pulse target so the loop above
+      // eases toward it, giving a rhythmic "talking" feel.
+      utterance.onboundary = (event: any) => {
+        if (event.name === "word" || event.name === undefined) {
+          pulseTargetRef.current = 0.55 + Math.random() * 0.45;
+        }
+      };
+
       utterance.onend = () => {
+        stopPulseLoop();
         setStatus("idle");
         if (autoListenRef.current && !manuallyStoppedRef.current) {
           setTimeout(() => startListening(), 500);
         }
       };
-      utterance.onerror = () => setStatus("idle");
+      utterance.onerror = () => {
+        stopPulseLoop();
+        setStatus("idle");
+      };
       window.speechSynthesis.speak(utterance);
     },
-    [startListening]
+    [startListening, startPulseLoop, stopPulseLoop]
   );
 
   const handleUserSpeech = useCallback(
@@ -240,6 +299,10 @@ export function useUltronBrain() {
     historyRef.current = [];
     saveHistory([]);
   }, []);
+
+  useEffect(() => {
+    return () => stopPulseLoop();
+  }, [stopPulseLoop]);
 
   return {
     status,
