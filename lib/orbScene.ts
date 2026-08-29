@@ -13,6 +13,8 @@ export interface OrbSceneApi {
   zoomIn(): void;
   zoomOut(): void;
   resetView(): void;
+  /** Feed a 0–1 volume value each frame while Ultron is speaking. Call with 0 (or stop calling) when silent. */
+  setSpeechLevel(level: number): void;
   dispose(): void;
 }
 
@@ -102,8 +104,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   const C_HOT = 0x99e0ff;
 
   // ——— ORB ROOT ———
-  // Every part of the orb (shells, core, orbiting debris, text, dust, rings)
-  // lives under this group.
   const orbGroup = new THREE.Group();
   scene.add(orbGroup);
 
@@ -118,7 +118,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     });
   }
 
-  // ——— UTILITY: Create ring at latitude ———
   function latRing(radius: number, lat: number, segs = 120) {
     const r = radius * Math.cos(lat);
     const y = radius * Math.sin(lat);
@@ -130,7 +129,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     return new THREE.BufferGeometry().setFromPoints(pts);
   }
 
-  // ——— UTILITY: Create meridian ———
   function meridian(radius: number, lon: number, segs = 120) {
     const pts: THREE.Vector3[] = [];
     for (let i = 0; i <= segs; i++) {
@@ -152,7 +150,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   const outerShell = new THREE.Group();
   const R1 = 2.0;
 
-  // Dense latitude rings (30+)
   for (let i = -15; i <= 15; i++) {
     const lat = (i / 15) * (Math.PI / 2) * 0.95;
     const opacity = i % 3 === 0 ? 0.5 : 0.12;
@@ -160,7 +157,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     outerShell.add(new THREE.Line(latRing(R1, lat), lineMat(color, opacity)));
   }
 
-  // Dense meridians (24)
   for (let i = 0; i < 24; i++) {
     const lon = (i / 24) * Math.PI * 2;
     const isMajor = i % 6 === 0;
@@ -172,15 +168,14 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     );
   }
 
-  // 4 bright cross meridians (the "plus" shape) — wide bands
   const CROSS_LINES = 18;
-  const CROSS_SPREAD = 0.25; // radians total width
+  const CROSS_SPREAD = 0.25;
   for (let i = 0; i < 4; i++) {
     const lon = (i / 4) * Math.PI * 2;
     for (let j = 0; j < CROSS_LINES; j++) {
-      const t = (j / (CROSS_LINES - 1)) * 2 - 1; // -1 to 1
+      const t = (j / (CROSS_LINES - 1)) * 2 - 1;
       const offset = (t * CROSS_SPREAD) / 2;
-      const falloff = 1 - Math.abs(t) * 0.7; // brighter at center, dimmer at edges
+      const falloff = 1 - Math.abs(t) * 0.7;
       const opacity = 0.85 * falloff;
       const color = Math.abs(t) < 0.3 ? C_BRIGHT : C_MID;
       outerShell.add(
@@ -189,7 +184,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     }
   }
 
-  // Bright equator band — wide
   const EQ_LINES = 20;
   const EQ_SPREAD = 0.35;
   for (let j = 0; j < EQ_LINES; j++) {
@@ -206,7 +200,7 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   orbGroup.add(outerShell);
 
   // ═══════════════════════════════════════════════
-  // LAYER 2: GRID PANELS on the sphere surface
+  // LAYER 2: GRID PANELS
   // ═══════════════════════════════════════════════
   const panelGroup = new THREE.Group();
 
@@ -221,7 +215,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     const group = new THREE.Group();
     const mat = lineMat(C_DIM, 0.25);
 
-    // horizontal lines
     for (let i = 0; i <= divisions; i++) {
       const lat = latCenter - latSpan / 2 + (i / divisions) * latSpan;
       const pts: THREE.Vector3[] = [];
@@ -238,7 +231,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
       group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
     }
 
-    // vertical lines
     for (let j = 0; j <= divisions; j++) {
       const lon = lonCenter - lonSpan / 2 + (j / divisions) * lonSpan;
       const pts: THREE.Vector3[] = [];
@@ -258,7 +250,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     return group;
   }
 
-  // Scatter panels across the sphere
   for (let i = 0; i < 30; i++) {
     const lat = (Math.random() - 0.5) * Math.PI * 0.8;
     const lon = Math.random() * Math.PI * 2;
@@ -276,12 +267,11 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   orbGroup.add(panelGroup);
 
   // ═══════════════════════════════════════════════
-  // LAYER 3: SECONDARY SHELL — offset, partial arcs
+  // LAYER 3: SECONDARY SHELL
   // ═══════════════════════════════════════════════
   const shell2 = new THREE.Group();
   const R2 = 2.12;
 
-  // Partial arcs at random latitudes
   for (let i = 0; i < 16; i++) {
     const lat = (Math.random() - 0.5) * Math.PI * 0.85;
     const startLon = Math.random() * Math.PI * 2;
@@ -302,7 +292,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     );
   }
 
-  // Partial meridian arcs
   for (let i = 0; i < 12; i++) {
     const lon = Math.random() * Math.PI * 2;
     const startLat = (Math.random() - 0.5) * Math.PI * 0.8;
@@ -329,12 +318,11 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   orbGroup.add(shell2);
 
   // ═══════════════════════════════════════════════
-  // LAYER 4: INNER CORE — spiral geodesic
+  // LAYER 4: INNER CORE
   // ═══════════════════════════════════════════════
   const innerCore = new THREE.Group();
   const R3 = 0.9;
 
-  // Dense spirals
   for (let s = 0; s < 8; s++) {
     const pts: THREE.Vector3[] = [];
     const turns = 3 + Math.random() * 2;
@@ -360,13 +348,11 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     );
   }
 
-  // Inner latitude rings
   for (let i = -6; i <= 6; i++) {
     const lat = (i / 6) * (Math.PI / 2) * 0.9;
     innerCore.add(new THREE.Line(latRing(R3, lat, 80), lineMat(C_DIM, 0.2)));
   }
 
-  // Inner meridians
   for (let i = 0; i < 12; i++) {
     const lon = (i / 12) * Math.PI * 2;
     innerCore.add(new THREE.Line(meridian(R3, lon, 80), lineMat(C_DIM, 0.15)));
@@ -375,18 +361,16 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   orbGroup.add(innerCore);
 
   // ═══════════════════════════════════════════════
-  // LAYER 5: INNERMOST CORE — bright hot center
+  // LAYER 5: INNERMOST CORE
   // ═══════════════════════════════════════════════
   const coreR = 0.25;
 
-  // Icosahedron wireframe core
   const icoGeo = new THREE.IcosahedronGeometry(coreR, 1);
   const icoEdges = new THREE.EdgesGeometry(icoGeo);
   const icoWireMat = lineMat(C_HOT, 0.9);
   const icoWire = new THREE.LineSegments(icoEdges, icoWireMat);
   orbGroup.add(icoWire);
 
-  // Glowing center sphere — subtle, see-through
   const coreSphereMat = new THREE.MeshBasicMaterial({
     color: C_HOT,
     transparent: true,
@@ -396,7 +380,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   const coreSphere = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), coreSphereMat);
   orbGroup.add(coreSphere);
 
-  // Larger faint glow — very subtle
   const glowSphereMat = new THREE.MeshBasicMaterial({
     color: C_MID,
     transparent: true,
@@ -407,7 +390,7 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   orbGroup.add(glowSphere);
 
   // ═══════════════════════════════════════════════
-  // CODE TEXT — tiny, dense, scattered
+  // CODE TEXT
   // ═══════════════════════════════════════════════
   const codeSnippets = [
     "sys.init()", "0xFF3A", "malloc()", ">> SCAN", "void*", "ACK",
@@ -480,7 +463,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     return group;
   }
 
-  // On outer sphere — dense text coverage
   const textOuter = scatterText(
     1200,
     () => 0.04 + Math.random() * 0.04,
@@ -489,7 +471,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   );
   orbGroup.add(textOuter);
 
-  // On inner core — more text
   const textInner = scatterText(
     100,
     () => 0.03 + Math.random() * 0.03,
@@ -498,7 +479,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   );
   orbGroup.add(textInner);
 
-  // Floating ambient text between shells
   const textAmbient = scatterText(
     400,
     () => 0.03,
@@ -510,7 +490,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   // ═══════════════════════════════════════════════
   // ORBITING DEBRIS / ROCKS
   // ═══════════════════════════════════════════════
-  // Shared geometries for performance — reuse across 250 satellites
   const debrisGeos = [
     new THREE.IcosahedronGeometry(0.012, 0),
     new THREE.IcosahedronGeometry(0.02, 0),
@@ -521,6 +500,7 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   ];
   interface DebrisOrbit {
     orbitR: number;
+    baseOrbitR: number;
     speed: number;
     tiltX: number;
     tiltZ: number;
@@ -541,11 +521,10 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     const tiltX = (Math.random() - 0.5) * Math.PI * 0.9;
     const tiltZ = (Math.random() - 0.5) * Math.PI * 0.5;
     const phase = Math.random() * Math.PI * 2;
-    mesh.userData = { orbitR, speed, tiltX, tiltZ, phase } satisfies DebrisOrbit;
+    mesh.userData = { orbitR, baseOrbitR: orbitR, speed, tiltX, tiltZ, phase } satisfies DebrisOrbit;
     debris.push(mesh);
     orbGroup.add(mesh);
 
-    // ~15% get a faint trailing line
     if (Math.random() > 0.85) {
       const trailPts: THREE.Vector3[] = [];
       for (let j = 0; j <= 15; j++) {
@@ -567,13 +546,12 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   }
 
   // ═══════════════════════════════════════════════
-  // DUST PARTICLES — lots of them
+  // DUST PARTICLES
   // ═══════════════════════════════════════════════
   const dustCount = 2000;
   const dustPos = new Float32Array(dustCount * 3);
 
   for (let i = 0; i < dustCount; i++) {
-    // Concentrate near the sphere, sparse further out
     const rr = 0.5 + Math.pow(Math.random(), 0.6) * 7;
     const theta = Math.random() * Math.PI * 2;
     const phi = Math.acos(2 * Math.random() - 1);
@@ -585,7 +563,6 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   const dustGeo = new THREE.BufferGeometry();
   dustGeo.setAttribute("position", new THREE.Float32BufferAttribute(dustPos, 3));
 
-  // Soft dot texture
   const dotC = document.createElement("canvas");
   dotC.width = dotC.height = 64;
   const dCtx = dotC.getContext("2d")!;
@@ -609,6 +586,8 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   });
   const dustPoints = new THREE.Points(dustGeo, dustMat);
   orbGroup.add(dustPoints);
+  const dustBaseSize = 0.04;
+  const dustBaseOpacity = 0.5;
 
   // ═══════════════════════════════════════════════
   // SCANNING RINGS
@@ -633,7 +612,7 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   orbGroup.add(scanRing1, scanRing2);
 
   // ═══════════════════════════════════════════════
-  // HEXAGONAL NODES — small tech details
+  // HEXAGONAL NODES
   // ═══════════════════════════════════════════════
   for (let i = 0; i < 15; i++) {
     const phi = Math.acos(2 * Math.random() - 1);
@@ -691,6 +670,18 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
   }
 
   // ═══════════════════════════════════════════════
+  // SPEECH-REACTIVE STATE
+  // ═══════════════════════════════════════════════
+  // Target level set externally via setSpeechLevel(); smoothedLevel eases
+  // toward it each frame so the reaction feels organic, not jumpy.
+  let targetSpeechLevel = 0;
+  let smoothedSpeechLevel = 0;
+
+  function setSpeechLevel(level: number) {
+    targetSpeechLevel = THREE.MathUtils.clamp(level, 0, 1);
+  }
+
+  // ═══════════════════════════════════════════════
   // ANIMATION
   // ═══════════════════════════════════════════════
   const clock = new THREE.Clock();
@@ -702,6 +693,13 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     if (disposed) return;
     rafId = requestAnimationFrame(animate);
     const t = clock.getElapsedTime();
+
+    // Ease the smoothed speech level toward its target — fast attack, slower release
+    const attack = 0.35;
+    const release = 0.08;
+    const rate = targetSpeechLevel > smoothedSpeechLevel ? attack : release;
+    smoothedSpeechLevel += (targetSpeechLevel - smoothedSpeechLevel) * rate;
+    const voice = smoothedSpeechLevel; // 0–1, use below
 
     // Outer shell rotation
     outerShell.rotation.y += 0.0015;
@@ -724,37 +722,41 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     icoWire.rotation.x += 0.008;
     icoWire.rotation.y += 0.012;
 
-    // Core pulse — dramatic surges but mostly transparent
+    // Core pulse — dramatic surges but mostly transparent, boosted by voice
     const wave1 = Math.sin(t * 1.2);
-    const wave3 = Math.pow(Math.max(0, Math.sin(t * 0.4)), 5); // rare big surge
-    const wave4 = Math.pow(Math.max(0, Math.sin(t * 0.7 + 2)), 8); // mega surge
-    const fadeOut = Math.pow(Math.max(0, Math.sin(t * 0.25)), 3); // periodic full transparency
-    const surge = wave3 * 1.5 + wave4 * 2.0;
-    const coreScale = 1 + surge + Math.sin(t * 5) * 0.05;
+    const wave3 = Math.pow(Math.max(0, Math.sin(t * 0.4)), 5);
+    const wave4 = Math.pow(Math.max(0, Math.sin(t * 0.7 + 2)), 8);
+    const fadeOut = Math.pow(Math.max(0, Math.sin(t * 0.25)), 3);
+    const surge = wave3 * 1.5 + wave4 * 2.0 + voice * 0.9;
+    const coreScale = 1 + surge + Math.sin(t * (5 + voice * 10)) * 0.05;
     coreSphere.scale.setScalar(coreScale);
-    // Opacity: mostly very low (0-0.15), sometimes fully transparent, brief bright on surge
     const coreOpacity = Math.max(
       0,
-      (0.08 + wave1 * 0.05 + surge * 0.2) * (1 - fadeOut * 0.95),
+      (0.08 + wave1 * 0.05 + surge * 0.2 + voice * 0.15) * (1 - fadeOut * 0.95),
     );
-    coreSphereMat.opacity = Math.min(0.6, coreOpacity);
+    coreSphereMat.opacity = Math.min(0.7, coreOpacity);
     glowSphere.scale.setScalar(1 + surge * 0.8);
-    glowSphereMat.opacity = Math.max(0, (0.03 + surge * 0.08) * (1 - fadeOut * 0.9));
-    // Icosahedron wireframe stays visible even when glow fades
+    glowSphereMat.opacity = Math.max(0, (0.03 + surge * 0.08 + voice * 0.06) * (1 - fadeOut * 0.9));
     icoWire.scale.setScalar(1 + surge * 0.6);
-    icoWireMat.opacity = Math.min(1, 0.5 + surge * 0.4);
+    icoWireMat.opacity = Math.min(1, 0.5 + surge * 0.4 + voice * 0.2);
 
-    // Debris orbits
+    // Debris orbits — speed up, jitter, and push outward slightly on voice
+    const debrisSpeedMult = 1 + voice * 2.5;
+    const debrisJitter = voice * 0.15;
     debris.forEach((d) => {
       const u = d.userData as DebrisOrbit;
-      const a = t * u.speed + u.phase;
+      const a = t * u.speed * debrisSpeedMult + u.phase;
+      const r = u.baseOrbitR * (1 + voice * 0.08);
       d.position.set(
-        u.orbitR * Math.cos(a) * Math.cos(u.tiltX),
-        u.orbitR * Math.sin(u.tiltX) * Math.sin(a * 0.8) + Math.sin(a * 0.3 + u.tiltZ) * 0.2,
-        u.orbitR * Math.sin(a) * Math.cos(u.tiltZ),
+        r * Math.cos(a) * Math.cos(u.tiltX) +
+          (debrisJitter ? Math.sin(t * 9 + u.phase * 5) * debrisJitter : 0),
+        r * Math.sin(u.tiltX) * Math.sin(a * 0.8) +
+          Math.sin(a * 0.3 + u.tiltZ) * 0.2 +
+          (debrisJitter ? Math.cos(t * 11 + u.phase * 3) * debrisJitter : 0),
+        r * Math.sin(a) * Math.cos(u.tiltZ),
       );
-      d.rotation.x += 0.015;
-      d.rotation.z += 0.01;
+      d.rotation.x += 0.015 + voice * 0.04;
+      d.rotation.z += 0.01 + voice * 0.03;
     });
 
     // Text drift
@@ -766,7 +768,7 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     for (const [group, mult] of driftGroups) {
       group.children.forEach((sp) => {
         const u = sp.userData as SpriteDrift;
-        u.theta += u.speed * mult;
+        u.theta += u.speed * mult * (1 + voice * 1.5);
         sp.position.set(
           u.r * Math.sin(u.phi) * Math.cos(u.theta),
           u.r * Math.cos(u.phi),
@@ -788,8 +790,10 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     scanRing2.scale.set(scanS2, scanS2, 1);
     (scanRing2.material as THREE.MeshBasicMaterial).opacity = 0.15 * scanS2;
 
-    // Dust rotation
-    dustPoints.rotation.y += 0.0002;
+    // Dust rotation + reactive size/opacity flicker
+    dustPoints.rotation.y += 0.0002 + voice * 0.001;
+    dustMat.size = dustBaseSize * (1 + voice * 1.2);
+    dustMat.opacity = Math.min(1, dustBaseOpacity + voice * 0.4);
 
     // Random flicker on some panels
     flickerTimer += 0.016;
@@ -802,8 +806,8 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
       });
     }
 
-    // Bloom pulse
-    bloom.strength = 1.6 + Math.sin(t * 0.8) * 0.3;
+    // Bloom pulse — boosted while speaking
+    bloom.strength = 1.6 + Math.sin(t * 0.8) * 0.3 + voice * 0.9;
 
     // Update chromatic aberration time
     chromaticPass.uniforms.uTime.value = t;
@@ -853,6 +857,7 @@ export function createOrbScene(container: HTMLElement): OrbSceneApi {
     zoomIn: () => zoomBy(0.65),
     zoomOut: () => zoomBy(1.55),
     resetView,
+    setSpeechLevel,
     dispose,
   };
 }
